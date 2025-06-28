@@ -122,21 +122,20 @@ resource "aws_iam_policy" "github_actions_policy" {
         Resource = "arn:aws:dynamodb:*:*:table/rennan-tech-terraform-locks"
       },
 
-      # ── read-only para plan/refresh ─────────────────
       {
         Effect   = "Allow",
         Action   = [
-          # ECR Public
+          "s3:GetBucketCors",
+          "dynamodb:ListTagsOfResource",
           "ecr-public:DescribeRepositories",
           "ecr-public:GetRepositoryCatalogData",
-          # EC2
+          "ecr-public:ListTagsForResource",
           "ec2:Describe*",
-          # IAM
           "iam:GetRole",
           "iam:ListOpenIDConnectProviders",
           "iam:GetOpenIDConnectProvider",
           "iam:ListRolePolicies",
-          # SSM
+          "iam:ListAttachedRolePolicies",
           "ssm:ListDocuments"
         ],
         Resource = "*"
