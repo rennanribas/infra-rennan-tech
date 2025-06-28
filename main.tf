@@ -80,6 +80,9 @@ resource "aws_iam_policy" "github_actions_policy" {
         Action   = [
           "ecr-public:GetAuthorizationToken",
           "sts:GetServiceBearerToken",
+          "ecr-public:BatchCheckLayerAvailability",
+          "ecr-public:BatchGetImage",
+          "ecr-public:GetDownloadUrlForLayer",
           "ecr-public:InitiateLayerUpload",
           "ecr-public:UploadLayerPart",
           "ecr-public:CompleteLayerUpload",

@@ -72,23 +72,44 @@ aws-identity: ; docker compose -f docker-compose.dev.yml exec aws-cli aws sts ge
 
 # push outputs (account-id, instance-id, ECR URIs) to child repos
 propagate-secrets:
-	@echo "Propagating secrets to application repos…"
-	@ACCOUNT_ID=$$(aws sts get-caller-identity --query Account --output text); \
+	@echo "============================================"
+	@echo "🔍 COLLECTING VALUES FROM AWS & TERRAFORM"
+	@echo "============================================"
+	@ACCOUNT_ID=$$(aws sts get-caller-identity --profile personal --query Account --output text); \
 	INSTANCE_ID=$$(docker compose -f docker-compose.dev.yml \
 		exec -T terraform terraform output -raw instance_id); \
 	RENNAN_REPO=$$(docker compose -f docker-compose.dev.yml \
 		exec -T terraform terraform output -raw ecr_rennan_tech_repository_url); \
 	LAB_REPO=$$(docker compose -f docker-compose.dev.yml \
 		exec -T terraform terraform output -raw ecr_engineer_lab_repository_url); \
+	echo "AWS_ACCOUNT_ID      = $$ACCOUNT_ID"; \
+	echo "AWS_REGION          = us-east-1"; \
+	echo "INSTANCE_ID         = $$INSTANCE_ID"; \
+	echo "RENNAN_REPO (ECR)   = $$RENNAN_REPO"; \
+	echo "LAB_REPO (ECR)      = $$LAB_REPO"; \
+	echo ""; \
+	echo "============================================"; \
+	echo "📤 PROPAGATING SECRETS TO REPOSITORIES"; \
+	echo "============================================"; \
 	for R in rennan-tech-landing engineer-lab; do \
-		echo "• $$R"; \
+		echo "• Setting secrets for repo: $$R"; \
+		echo "  - AWS_ACCOUNT_ID = $$ACCOUNT_ID"; \
+		echo "  - AWS_REGION = us-east-1"; \
+		echo "  - INSTANCE_ID = $$INSTANCE_ID"; \
 		gh secret set AWS_ACCOUNT_ID --body "$$ACCOUNT_ID" --repo rennanribas/$$R; \
 		gh secret set AWS_REGION     --body us-east-1       --repo rennanribas/$$R; \
 		gh secret set INSTANCE_ID    --body "$$INSTANCE_ID" --repo rennanribas/$$R; \
+		echo ""; \
 	done; \
+	echo "• Setting ECR_REPOSITORY_URI for rennan-tech-landing:"; \
+	echo "  - ECR_REPOSITORY_URI = $$RENNAN_REPO"; \
 	gh secret set ECR_REPOSITORY_URI --body "$$RENNAN_REPO" --repo rennanribas/rennan-tech-landing; \
+	echo ""; \
+	echo "• Setting ECR_REPOSITORY_URI for engineer-lab:"; \
+	echo "  - ECR_REPOSITORY_URI = $$LAB_REPO"; \
 	gh secret set ECR_REPOSITORY_URI --body "$$LAB_REPO"   --repo rennanribas/engineer-lab; \
-	echo "✔ Secrets propagated"
+	echo ""; \
+	echo "✅ Secrets propagated successfully!"
 	
 clean:
 	docker compose -f docker-compose.dev.yml down -v
