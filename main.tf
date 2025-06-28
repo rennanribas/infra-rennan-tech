@@ -123,7 +123,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 
 resource "aws_security_group" "allow_http_https" {
   name        = "allow_http_https"
-  description = "HTTP (80) and HTTPS (443)"
+  description = "Allow HTTP and HTTPS traffic"
 
   ingress {
     from_port   = 80
@@ -185,4 +185,7 @@ output "instance_public_ip"              { value = aws_instance.web_server.publi
 output "instance_public_dns"             { value = aws_instance.web_server.public_dns }
 output "github_actions_role_arn"         { value = aws_iam_role.github_actions.arn }
 output "ecr_rennan_tech_repository_url"  { value = aws_ecrpublic_repository.rennan-tech.repository_uri }
-output "ecr_engineer_lab_repository_url" { value = aws_ecrpublic_repository.engineer_lab.repository_uri }
+output "ecr_engineer_lab_repository_url" {
+  value = aws_ecrpublic_repository.engineer-lab.repository_uri
+}
+
