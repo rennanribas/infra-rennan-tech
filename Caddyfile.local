@@ -1,0 +1,10 @@
+:80 {
+    route /engineer/* {
+        uri strip_prefix /engineer
+        reverse_proxy engineer-lab:80
+    }
+    
+    route /* {
+        reverse_proxy rennan-tech:80
+    }
+} 
