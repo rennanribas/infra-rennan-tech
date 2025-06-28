@@ -14,7 +14,6 @@ permissions:
 jobs:
   terraform:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -76,7 +75,7 @@ jobs:
       - name: Propagate outputs
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT_CROSS_REPO }}
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           INSTANCE_ID=$(terraform output -raw instance_id)
@@ -84,10 +83,10 @@ jobs:
           LAB_REPO=$(terraform output -raw ecr_engineer_lab_repository_url)
 
           for REPO in rennan-tech-landing engineer-lab; do
-            gh secret set AWS_ACCOUNT_ID --body "$ACCOUNT_ID" --repo ${{ github.repository_owner }}/$REPO
-            gh secret set AWS_REGION     --body "us-east-1"   --repo ${{ github.repository_owner }}/$REPO
-            gh secret set INSTANCE_ID    --body "$INSTANCE_ID" --repo ${{ github.repository_owner }}/$REPO
+            gh secret set AWS_ACCOUNT_ID --body "$ACCOUNT_ID" --repo rennanribas/${REPO}
+            gh secret set AWS_REGION     --body "us-east-1"   --repo rennanribas/${REPO}
+            gh secret set INSTANCE_ID    --body "$INSTANCE_ID" --repo rennanribas/${REPO}
           done
 
-          gh secret set ECR_REPOSITORY_URI --body "$RENAN_REPO" --repo ${{ github.repository_owner }}/rennan-tech-landing
-          gh secret set ECR_REPOSITORY_URI --body "$LAB_REPO"   --repo ${{ github.repository_owner }}/engineer-lab
+          gh secret set ECR_REPOSITORY_URI --body "$RENAN_REPO" --repo rennanribas/rennan-tech-landing
+          gh secret set ECR_REPOSITORY_URI --body "$LAB_REPO"   --repo rennanribas/engineer-lab
