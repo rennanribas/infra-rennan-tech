@@ -104,7 +104,8 @@ resource "aws_iam_policy" "github_actions_policy" {
         Action   = [
           "s3:ListBucket",
           "s3:GetBucketPolicy",
-          "s3:GetBucketLocation"                  # ← faltava
+          "s3:GetBucketLocation",
+          "s3:GetBucketAcl"
         ],
         Resource = "arn:aws:s3:::rennan-tech-terraform-state"
       },
@@ -115,7 +116,8 @@ resource "aws_iam_policy" "github_actions_policy" {
           "dynamodb:PutItem",
           "dynamodb:DeleteItem",
           "dynamodb:DescribeTable",
-          "dynamodb:DescribeContinuousBackups"
+          "dynamodb:DescribeContinuousBackups",
+          "dynamodb:DescribeTimeToLive"
         ],
         Resource = "arn:aws:dynamodb:*:*:table/rennan-tech-terraform-locks"
       },
@@ -126,11 +128,14 @@ resource "aws_iam_policy" "github_actions_policy" {
         Action   = [
           # ECR Public
           "ecr-public:DescribeRepositories",
+          "ecr-public:GetRepositoryCatalogData",
           # EC2
           "ec2:Describe*",
           # IAM
           "iam:GetRole",
           "iam:ListOpenIDConnectProviders",
+          "iam:GetOpenIDConnectProvider",
+          "iam:ListRolePolicies",
           # SSM
           "ssm:ListDocuments"
         ],
