@@ -64,11 +64,12 @@ resource "aws_iam_role" "github_actions" {
 
 resource "aws_iam_policy" "github_actions_policy" {
   name        = "GitHubActionsPolicy"
-  description = "Allow GitHub Actions to use ECR Public and SSM"
+  description = "Allow GitHub Actions to use ECR Public, SSM and Terraform state"
 
   policy = jsonencode({
-    Version   = "2012-10-17",
+    Version = "2012-10-17",
     Statement = [
+      # --- ECR Public ---
       {
         Effect   = "Allow",
         Action   = [
@@ -81,6 +82,8 @@ resource "aws_iam_policy" "github_actions_policy" {
         ],
         Resource = "*"
       },
+
+      # --- SSM redeploy ---
       {
         Effect   = "Allow",
         Action   = "ssm:SendCommand",
@@ -88,6 +91,34 @@ resource "aws_iam_policy" "github_actions_policy" {
           aws_instance.web_server.arn,
           "arn:aws:ssm:*:*:document/AWS-RunShellScript"
         ]
+      },
+
+      # --- Terraform state in S3 ---
+      {
+        Effect   = "Allow",
+        Action   = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ],
+        Resource = "arn:aws:s3:::rennan-tech-terraform-state/infrastructure/*"
+      },
+      {
+        Effect   = "Allow",
+        Action   = "s3:ListBucket",
+        Resource = "arn:aws:s3:::rennan-tech-terraform-state"
+      },
+
+      # --- DynamoDB state locking ---
+      {
+        Effect   = "Allow",
+        Action   = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:DescribeTable"
+        ],
+        Resource = "arn:aws:dynamodb:*:*:table/rennan-tech-terraform-locks"
       }
     ]
   })
