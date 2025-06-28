@@ -1,0 +1,12 @@
+
+{
+    email rennan.ribas@gmail.com
+}
+
+rennan.tech {
+    reverse_proxy rennan-tech:80
+}
+
+engineer.rennan.tech {
+    reverse_proxy engineer-lab:80
+}

@@ -1,0 +1,42 @@
+
+version: '3.8'
+
+services:
+  rennan-tech:
+    build:
+      context: ../rennan-tech
+      dockerfile: Dockerfile
+    container_name: rennan-tech
+    restart: unless-stopped
+    networks:
+      - caddy
+
+  engineer-lab:
+    build:
+      context: ../engineer-lab
+      dockerfile: Dockerfile
+    container_name: engineer-lab
+    restart: unless-stopped
+    networks:
+      - caddy
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - caddy
+
+networks:
+  caddy:
+
+volumes:
+  caddy_data:
+  caddy_config:
