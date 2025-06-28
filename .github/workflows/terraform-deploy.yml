@@ -7,26 +7,31 @@ on:
     branches: [main]
 
 permissions:
-  id-token: write
+  id-token: write # OIDC → AWS
   contents: read
   pull-requests: write
 
 jobs:
   terraform:
     runs-on: ubuntu-latest
+
     steps:
+      # ────────────────────────────── checkout ──────────────────────────────
       - uses: actions/checkout@v4
 
+      # ───────────────────────────── terraform CLI ─────────────────────────
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: '~1.5'
 
+      # ─────────────────────── AWS credentials via OIDC ────────────────────
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-role
           aws-region: us-east-1
           role-skip-session-tagging: true
 
+      # ────────────────────────── terraform workflow ───────────────────────
       - id: fmt
         run: terraform fmt -check || true
 
@@ -40,9 +45,9 @@ jobs:
         run: |
           terraform plan -no-color -out=tfplan
           terraform show -no-color tfplan > plan.txt
-          echo "plan_output<<EOF" >> $GITHUB_OUTPUT
-          cat plan.txt >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          echo "plan_output<<EOF" >> "$GITHUB_OUTPUT"
+          cat plan.txt >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Comment plan
         if: github.event_name == 'pull_request'
@@ -63,19 +68,25 @@ jobs:
             \`\`\`
 
             </details>`;
-            github.rest.issues.createComment({
-              ...context.issue,
-              body
-            });
+            github.rest.issues.createComment({ ...context.issue, body });
 
       - name: Apply
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: terraform apply -auto-approve tfplan
 
-      - name: Propagate outputs
+      # ──────────────────────── gh CLI authentication ──────────────────────
+      - name: Authenticate gh CLI
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ secrets.GH_PAT_CROSS_REPO }}
+        run: |
+          echo "$GH_TOKEN" | gh auth login --with-token
+          gh auth status
+          unset GH_TOKEN                       # evita warnings do gh CLI
+
+      # ───────────────────────── propagate outputs ─────────────────────────
+      - name: Propagate outputs
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           INSTANCE_ID=$(terraform output -raw instance_id)
