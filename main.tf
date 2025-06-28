@@ -47,14 +47,16 @@ resource "aws_iam_role" "github_actions" {
     Version   = "2012-10-17",
     Statement = [{
       Effect    = "Allow",
-      Principal = { Federated = data.aws_iam_openid_connect_provider.github.arn },
+      Principal = {
+        Federated = data.aws_iam_openid_connect_provider.github.arn
+      },
       Action    = "sts:AssumeRoleWithWebIdentity",
       Condition = {
-        "StringEquals" = {
+        StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
         },
-        "StringLike" : {
-          "token.actions.githubusercontent.com:sub" : [
+        StringLike = {
+          "token.actions.githubusercontent.com:sub" = [
             "repo:rennanribas/rennan-tech-landing:*",
             "repo:rennanribas/engineer-lab:*",
             "repo:rennanribas/infra-rennan-tech:*"
