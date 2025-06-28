@@ -125,8 +125,8 @@ resource "aws_iam_policy" "github_actions_policy" {
       {
         Effect   = "Allow",
         Action   = [
-          "s3:GetBucket*",
-          "s3:ListBucket",
+          "s3:Get*",
+          "s3:List*",
           "dynamodb:Describe*",
           "dynamodb:ListTagsOfResource",
           "ecr-public:Describe*",
