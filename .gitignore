@@ -43,3 +43,5 @@ terraform.rc
 
 # Ignore log files
 *.log
+
+*.pem
