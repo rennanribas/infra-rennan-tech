@@ -1,19 +1,15 @@
-version: '3.8'
-
 services:
   rennan-tech:
-    image: public.ecr.aws/rennan-tech:latest
+    image: ${RENNAN_TECH_IMAGE:-rennan-tech:latest}
     container_name: rennan-tech
     restart: unless-stopped
-    networks:
-      - caddy
+    networks: [web]
 
   engineer-lab:
-    image: public.ecr.aws/engineer-lab:latest
+    image: ${ENGINEER_LAB_IMAGE:-engineer-lab:latest}
     container_name: engineer-lab
     restart: unless-stopped
-    networks:
-      - caddy
+    networks: [web]
 
   caddy:
     image: caddy:2-alpine
@@ -26,11 +22,10 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
       - caddy_config:/config
-    networks:
-      - caddy
+    networks: [web]
 
 networks:
-  caddy:
+  web:
 
 volumes:
   caddy_data:
