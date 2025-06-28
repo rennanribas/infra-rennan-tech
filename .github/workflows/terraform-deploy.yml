@@ -72,6 +72,13 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: terraform apply -auto-approve tfplan
 
+      - name: Authenticate gh CLI
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_CROSS_REPO }}
+        run: |
+          echo "$GH_TOKEN" | gh auth login --with-token
+
       - name: Propagate outputs
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
