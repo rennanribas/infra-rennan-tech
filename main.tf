@@ -69,7 +69,7 @@ resource "aws_iam_policy" "github_actions_policy" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
-      # --- ECR Public ---
+      # ── deploy actions ──────────────────────────────
       {
         Effect   = "Allow",
         Action   = [
@@ -82,8 +82,6 @@ resource "aws_iam_policy" "github_actions_policy" {
         ],
         Resource = "*"
       },
-
-      # --- SSM redeploy ---
       {
         Effect   = "Allow",
         Action   = "ssm:SendCommand",
@@ -93,32 +91,50 @@ resource "aws_iam_policy" "github_actions_policy" {
         ]
       },
 
-      # --- Terraform state in S3 ---
+      # ── backend S3 + DynamoDB ───────────────────────
       {
         Effect   = "Allow",
         Action   = [
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:DeleteObject"
+          "s3:GetObject", "s3:PutObject", "s3:DeleteObject"
         ],
         Resource = "arn:aws:s3:::rennan-tech-terraform-state/infrastructure/*"
       },
       {
         Effect   = "Allow",
-        Action   = "s3:ListBucket",
+        Action   = [
+          "s3:ListBucket",
+          "s3:GetBucketPolicy",
+          "s3:GetBucketLocation"                  # ← faltava
+        ],
         Resource = "arn:aws:s3:::rennan-tech-terraform-state"
       },
-
-      # --- DynamoDB state locking ---
       {
         Effect   = "Allow",
         Action   = [
           "dynamodb:GetItem",
           "dynamodb:PutItem",
           "dynamodb:DeleteItem",
-          "dynamodb:DescribeTable"
+          "dynamodb:DescribeTable",
+          "dynamodb:DescribeContinuousBackups"
         ],
         Resource = "arn:aws:dynamodb:*:*:table/rennan-tech-terraform-locks"
+      },
+
+      # ── read-only para plan/refresh ─────────────────
+      {
+        Effect   = "Allow",
+        Action   = [
+          # ECR Public
+          "ecr-public:DescribeRepositories",
+          # EC2
+          "ec2:Describe*",
+          # IAM
+          "iam:GetRole",
+          "iam:ListOpenIDConnectProviders",
+          # SSM
+          "ssm:ListDocuments"
+        ],
+        Resource = "*"
       }
     ]
   })
