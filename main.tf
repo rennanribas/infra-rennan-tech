@@ -1,14 +1,40 @@
-
 provider "aws" {
-  region = "us-east-1"
+  region  = var.aws_region
+  profile = "personal"
 }
 
-resource "aws_ecr_repository" "rennan-tech" {
-  name = "rennan-tech"
+resource "aws_ecrpublic_repository" "rennan-tech" {
+  repository_name = "rennan-tech"
+
+  catalog_data {
+    description      = "Landing page for Rennan Tech built with React 19.1 and SSR"
+    architectures    = ["x86-64"]
+    operating_systems = ["Linux"]
+  }
+
+  tags = {
+    Name        = "rennan-tech-ecr"
+    Environment = var.environment
+    Project     = var.project_name
+    ManagedBy   = "terraform"
+  }
 }
 
-resource "aws_ecr_repository" "engineer-lab" {
-  name = "engineer-lab"
+resource "aws_ecrpublic_repository" "engineer-lab" {
+  repository_name = "engineer-lab"
+
+  catalog_data {
+    description      = "Interactive platform for visualizing engineering concepts"
+    architectures    = ["x86-64"]
+    operating_systems = ["Linux"]
+  }
+
+  tags = {
+    Name        = "engineer-lab-ecr"
+    Environment = var.environment
+    Project     = var.project_name
+    ManagedBy   = "terraform"
+  }
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
@@ -34,8 +60,11 @@ resource "aws_iam_role" "github_actions" {
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
-          StringEquals = {
-            "token.actions.githubusercontent.com:sub" = ["repo:rennanribas/rennan-tech-landing:ref:refs/heads/main", "repo:rennanribas/engineer-lab:ref:refs/heads/main"]
+          "StringLike": {
+            "token.actions.githubusercontent.com:sub": [
+              "repo:rennanribas/rennan-tech-landing:*",
+              "repo:rennanribas/engineer-lab:*"
+            ]
           }
         }
       }
@@ -43,14 +72,67 @@ resource "aws_iam_role" "github_actions" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "ecr_policy" {
-  role       = aws_iam_role.github_actions.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess"
+resource "aws_iam_policy" "github_actions_policy" {
+  name        = "GitHubActionsPolicy"
+  description = "Policy for GitHub Actions to access ECR Public and SSM"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = [
+          "ecr-public:GetAuthorizationToken",
+          "sts:GetServiceBearerToken",
+          "ecr-public:InitiateLayerUpload",
+          "ecr-public:UploadLayerPart",
+          "ecr-public:CompleteLayerUpload",
+          "ecr-public:PutImage"
+        ],
+        Resource = "*"
+      },
+      {
+        Effect   = "Allow",
+        Action   = "ssm:SendCommand",
+        Resource = [
+          aws_instance.web_server.arn,
+          "arn:aws:ssm:*:*:document/AWS-RunShellScript"
+        ]
+      }
+    ]
+  })
 }
 
-resource "aws_iam_role_policy_attachment" "ec2_policy" {
+resource "aws_iam_role_policy_attachment" "github_actions_policy_attachment" {
   role       = aws_iam_role.github_actions.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
+  policy_arn = aws_iam_policy.github_actions_policy.arn
+}
+
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "ec2_profile"
+  role = aws_iam_role.ssm_role.name
+}
+
+resource "aws_iam_role" "ssm_role" {
+  name = "ssm-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        },
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ssm_policy_attachment" {
+  role       = aws_iam_role.ssm_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
 resource "aws_security_group" "allow_http_https" {
@@ -80,22 +162,76 @@ resource "aws_security_group" "allow_http_https" {
 }
 
 resource "aws_instance" "web_server" {
-  ami           = "ami-0c55b159cbfafe1f0" # Ubuntu 22.04 LTS
-  instance_type = "t2.micro"
+  ami           = "ami-0866a3c8686eaeeba" # Ubuntu 24.04 LTS (us-east-1)
+  instance_type = var.instance_type
 
   tags = {
-    Name = "Rennan-Tech-Server"
+    Name        = "${var.project_name}-server"
+    Environment = var.environment
+    Project     = var.project_name
+    ManagedBy   = "terraform"
   }
 
+  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
   vpc_security_group_ids = [aws_security_group.allow_http_https.id]
 
   user_data = <<-EOF
               #!/bin/bash
-              sudo apt-get update
-              sudo apt-get install -y docker.io
-              sudo systemctl start docker
-              sudo systemctl enable docker
-              sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-              sudo chmod +x /usr/local/bin/docker-compose
+              # Update and install dependencies
+              apt-get update -y
+              apt-get install -y docker.io git curl
+
+              # Add ubuntu user to docker group
+              usermod -aG docker ubuntu
+
+              # Start and enable Docker
+              systemctl start docker
+              systemctl enable docker
+
+              # Install Docker Compose V2 (official method)
+              mkdir -p /usr/local/lib/docker/cli-plugins
+              curl -SL "https://github.com/docker/compose/releases/download/v2.27.0/docker-compose-linux-x86_64" -o /usr/local/lib/docker/cli-plugins/docker-compose
+              chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+              ln -s /usr/local/lib/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
+
+              # Install and start SSM Agent (already included in Ubuntu 24.04)
+              systemctl enable amazon-ssm-agent
+              systemctl start amazon-ssm-agent
+
+              # Clone the infrastructure repository as the ubuntu user
+              sudo -u ubuntu git clone https://github.com/rennanribas/infra-rennan-tech.git /home/ubuntu/infra-rennan-tech
+              
+              # Set proper ownership
+              chown -R ubuntu:ubuntu /home/ubuntu/infra-rennan-tech
               EOF
+}
+
+output "instance_id" {
+  description = "ID of the EC2 instance"
+  value       = aws_instance.web_server.id
+}
+
+output "instance_public_ip" {
+  description = "Public IP address of the EC2 instance"
+  value       = aws_instance.web_server.public_ip
+}
+
+output "instance_public_dns" {
+  description = "Public DNS name of the EC2 instance"
+  value       = aws_instance.web_server.public_dns
+}
+
+output "ecr_rennan_tech_repository_url" {
+  description = "URL of the rennan-tech ECR repository"
+  value       = aws_ecrpublic_repository.rennan-tech.repository_uri
+}
+
+output "ecr_engineer_lab_repository_url" {
+  description = "URL of the engineer-lab ECR repository"
+  value       = aws_ecrpublic_repository.engineer-lab.repository_uri
+}
+
+output "github_actions_role_arn" {
+  description = "ARN of the GitHub Actions IAM role"
+  value       = aws_iam_role.github_actions.arn
 }

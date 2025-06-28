@@ -1,20 +1,15 @@
-
 version: '3.8'
 
 services:
   rennan-tech:
-    build:
-      context: ../rennan-tech
-      dockerfile: Dockerfile
+    image: public.ecr.aws/rennan-tech:latest
     container_name: rennan-tech
     restart: unless-stopped
     networks:
       - caddy
 
   engineer-lab:
-    build:
-      context: ../engineer-lab
-      dockerfile: Dockerfile
+    image: public.ecr.aws/engineer-lab:latest
     container_name: engineer-lab
     restart: unless-stopped
     networks:
@@ -25,8 +20,8 @@ services:
     container_name: caddy
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - '80:80'
+      - '443:443'
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data

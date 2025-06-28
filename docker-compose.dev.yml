@@ -1,0 +1,58 @@
+services:
+  terraform:
+    image: alpine/terragrunt:1.12.2
+    container_name: terraform-dev
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - ~/.aws:/root/.aws:ro
+      - terraform_cache:/tmp/.terraform
+    environment:
+      - TF_IN_AUTOMATION=true
+      - TF_INPUT=false
+      - AWS_PROFILE=personal
+    command: |
+      sh -c "
+        echo 'Terraform Development Environment Ready'
+        echo 'Available commands:'
+        echo '  terraform init'
+        echo '  terraform plan'
+        echo '  terraform apply'
+        echo '  terraform destroy'
+        echo ''
+        echo 'Usage: docker compose -f docker-compose.dev.yml exec terraform <command>'
+        sleep infinity
+      "
+    networks:
+      - terraform-dev
+
+  aws-cli:
+    image: public.ecr.aws/aws-cli/aws-cli:latest
+    container_name: aws-cli-dev
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - ~/.aws:/root/.aws:ro
+    environment:
+      - AWS_PROFILE=personal
+    entrypoint: |
+      sh -c "
+        echo 'AWS CLI Development Environment Ready'
+        echo 'Available commands:'
+        echo '  aws sts get-caller-identity'
+        echo '  aws s3 ls'
+        echo '  aws ec2 describe-instances'
+        echo ''
+        echo 'Usage: docker compose -f docker-compose.dev.yml exec aws-cli <command>'
+        sleep infinity
+      "
+    networks:
+      - terraform-dev
+
+networks:
+  terraform-dev:
+    driver: bridge
+
+volumes:
+  terraform_cache:
+    driver: local
