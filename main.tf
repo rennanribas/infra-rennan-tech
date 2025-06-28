@@ -125,19 +125,16 @@ resource "aws_iam_policy" "github_actions_policy" {
       {
         Effect   = "Allow",
         Action   = [
-          "s3:GetBucketCors",
-          "s3:GetBucketWebsite",
+          "s3:GetBucket*",
+          "s3:ListBucket",
+          "dynamodb:Describe*",
           "dynamodb:ListTagsOfResource",
-          "ecr-public:DescribeRepositories",
+          "ecr-public:Describe*",
           "ecr-public:GetRepositoryCatalogData",
           "ecr-public:ListTagsForResource",
           "ec2:Describe*",
-          "iam:GetRole",
-          "iam:GetInstanceProfile",
-          "iam:ListOpenIDConnectProviders",
-          "iam:GetOpenIDConnectProvider",
-          "iam:ListRolePolicies",
-          "iam:ListAttachedRolePolicies",
+          "iam:Get*",
+          "iam:List*",
           "ssm:ListDocuments"
         ],
         Resource = "*"
