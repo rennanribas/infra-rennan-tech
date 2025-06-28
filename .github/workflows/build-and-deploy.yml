@@ -1,0 +1,143 @@
+name: Build and Deploy Applications
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'rennan-tech-landing/**'
+      - 'engineer-lab/**'
+      - 'infra-rennan-tech/docker-compose.yml'
+      - 'infra-rennan-tech/Caddyfile'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: public.ecr.aws/q9c0i8b3
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    outputs:
+      rennan-tech-image: ${{ steps.images.outputs.rennan-tech }}
+      engineer-lab-image: ${{ steps.images.outputs.engineer-lab }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-role
+          aws-region: ${{ env.AWS_REGION }}
+          role-skip-session-tagging: true
+
+      - name: Login to Amazon ECR Public
+        run: |
+          aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+
+      - name: Build and push rennan-tech
+        working-directory: ./rennan-tech-landing
+        run: |
+          IMAGE_TAG=$(date +%Y%m%d-%H%M%S)-${GITHUB_SHA::8}
+          docker build -t $ECR_REGISTRY/rennan-tech:$IMAGE_TAG --target static .
+          docker tag $ECR_REGISTRY/rennan-tech:$IMAGE_TAG $ECR_REGISTRY/rennan-tech:latest
+          docker push $ECR_REGISTRY/rennan-tech:$IMAGE_TAG
+          docker push $ECR_REGISTRY/rennan-tech:latest
+          echo "RENNAN_TECH_IMAGE=$ECR_REGISTRY/rennan-tech:$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Build and push engineer-lab
+        working-directory: ./engineer-lab
+        run: |
+          IMAGE_TAG=$(date +%Y%m%d-%H%M%S)-${GITHUB_SHA::8}
+          docker build -t $ECR_REGISTRY/engineer-lab:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/engineer-lab:$IMAGE_TAG $ECR_REGISTRY/engineer-lab:latest
+          docker push $ECR_REGISTRY/engineer-lab:$IMAGE_TAG
+          docker push $ECR_REGISTRY/engineer-lab:latest
+          echo "ENGINEER_LAB_IMAGE=$ECR_REGISTRY/engineer-lab:$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Set image outputs
+        id: images
+        run: |
+          echo "rennan-tech=$RENNAN_TECH_IMAGE" >> $GITHUB_OUTPUT
+          echo "engineer-lab=$ENGINEER_LAB_IMAGE" >> $GITHUB_OUTPUT
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-role
+          aws-region: ${{ env.AWS_REGION }}
+          role-skip-session-tagging: true
+
+      - name: Deploy to EC2
+        run: |
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=rennan-tech-server" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[0].Instances[0].InstanceId' \
+            --output text)
+
+          if [ "$INSTANCE_ID" = "None" ] || [ "$INSTANCE_ID" = "null" ]; then
+            echo "No running instance found"
+            exit 1
+          fi
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids $INSTANCE_ID \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=[
+              "cd /home/ubuntu/infra-rennan-tech",
+              "git pull origin main",
+              "export RENNAN_TECH_IMAGE=${{ needs.build-and-push.outputs.rennan-tech-image }}",
+              "export ENGINEER_LAB_IMAGE=${{ needs.build-and-push.outputs.engineer-lab-image }}",
+              "sudo docker compose pull",
+              "sudo docker compose up -d",
+              "sudo docker image prune -f"
+            ]' \
+            --query 'Command.CommandId' \
+            --output text)
+
+          echo "Command ID: $COMMAND_ID"
+
+          # Wait for command to complete
+          aws ssm wait command-executed \
+            --command-id $COMMAND_ID \
+            --instance-id $INSTANCE_ID
+
+          # Get command output
+          aws ssm get-command-invocation \
+            --command-id $COMMAND_ID \
+            --instance-id $INSTANCE_ID \
+            --query 'StandardOutputContent' \
+            --output text
+
+      - name: Verify deployment
+        run: |
+          INSTANCE_IP=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=rennan-tech-server" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' \
+            --output text)
+
+          echo "Testing deployment at: $INSTANCE_IP"
+
+          # Wait a moment for services to be ready
+          sleep 30
+
+          # Test main site
+          if curl -f "http://$INSTANCE_IP" > /dev/null 2>&1; then
+            echo "✅ Main site is responding"
+          else
+            echo "❌ Main site is not responding"
+            exit 1
+          fi
