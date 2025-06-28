@@ -2,13 +2,10 @@ name: Deploy Infrastructure
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
-# These permissions are required for OIDC and secrets management
 permissions:
   id-token: write
   contents: read
@@ -19,96 +16,78 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: '~1.5'
 
-      - name: Configure AWS credentials using OIDC
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-role
-          role-session-name: terraform-deploy-session
           aws-region: us-east-1
           role-skip-session-tagging: true
 
-      - name: Terraform Format Check
-        run: terraform fmt -check
-        continue-on-error: true
+      - id: fmt
+        run: terraform fmt -check || true
 
-      - name: Terraform Init
+      - id: init
         run: terraform init
 
-      - name: Terraform Validate
+      - id: validate
         run: terraform validate
 
-      - name: Terraform Plan
-        id: plan
+      - id: plan
         run: |
           terraform plan -no-color -out=tfplan
+          terraform show -no-color tfplan > plan.txt
           echo "plan_output<<EOF" >> $GITHUB_OUTPUT
-          terraform show -no-color tfplan >> $GITHUB_OUTPUT
+          cat plan.txt >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-        continue-on-error: true
 
-      - name: Comment PR with Plan
+      - name: Comment plan
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
-            const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
-            #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
-            #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
-            #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+            const body = `
+            **Terraform results**
+            fmt:      ${{ steps.fmt.outcome }}
+            init:     ${{ steps.init.outcome }}
+            validate: ${{ steps.validate.outcome }}
+            plan:     ${{ steps.plan.outcome }}
 
-            <details><summary>Show Plan</summary>
+            <details><summary>Show plan</summary>
 
             \`\`\`terraform
             ${{ steps.plan.outputs.plan_output }}
             \`\`\`
 
-            </details>
-
-            *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
-
+            </details>`;
             github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: output
-            })
+              ...context.issue,
+              body
+            });
 
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      - name: Apply
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: terraform apply -auto-approve tfplan
 
-      - name: Set up GitHub CLI
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          # GitHub CLI is pre-installed on ubuntu-latest runners
-          gh --version
-
-      - name: Configure secrets in application repositories
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      - name: Propagate outputs
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Get AWS Account ID and Instance ID
-          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           INSTANCE_ID=$(terraform output -raw instance_id)
+          RENAN_REPO=$(terraform output -raw ecr_rennan_tech_repository_url)
+          LAB_REPO=$(terraform output -raw ecr_engineer_lab_repository_url)
 
-          echo "AWS Account ID: $AWS_ACCOUNT_ID"
-          echo "Instance ID: $INSTANCE_ID"
+          for REPO in rennan-tech-landing engineer-lab; do
+            gh secret set AWS_ACCOUNT_ID --body "$ACCOUNT_ID" --repo ${{ github.repository_owner }}/$REPO
+            gh secret set AWS_REGION     --body "us-east-1"   --repo ${{ github.repository_owner }}/$REPO
+            gh secret set INSTANCE_ID    --body "$INSTANCE_ID" --repo ${{ github.repository_owner }}/$REPO
+          done
 
-          # Set secrets in rennan-tech-landing repository
-          gh secret set AWS_ACCOUNT_ID --body "$AWS_ACCOUNT_ID" --repo ${{ github.repository_owner }}/rennan-tech-landing
-          gh secret set INSTANCE_ID --body "$INSTANCE_ID" --repo ${{ github.repository_owner }}/rennan-tech-landing
-
-          # Set secrets in engineer-lab repository
-          gh secret set AWS_ACCOUNT_ID --body "$AWS_ACCOUNT_ID" --repo ${{ github.repository_owner }}/engineer-lab
-          gh secret set INSTANCE_ID --body "$INSTANCE_ID" --repo ${{ github.repository_owner }}/engineer-lab
-
-          echo "✅ Secrets configured successfully in all repositories"
+          gh secret set ECR_REPOSITORY_URI --body "$RENAN_REPO" --repo ${{ github.repository_owner }}/rennan-tech-landing
+          gh secret set ECR_REPOSITORY_URI --body "$LAB_REPO"   --repo ${{ github.repository_owner }}/engineer-lab
