@@ -63,7 +63,8 @@ resource "aws_iam_role" "github_actions" {
           "StringLike": {
             "token.actions.githubusercontent.com:sub": [
               "repo:rennanribas/rennan-tech-landing:*",
-              "repo:rennanribas/engineer-lab:*"
+              "repo:rennanribas/engineer-lab:*",
+              "repo:rennanribas/infra-rennan-tech:*"
             ]
           }
         }
