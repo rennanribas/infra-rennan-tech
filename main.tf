@@ -92,10 +92,16 @@ resource "aws_iam_policy" "github_actions_policy" {
       },
       {
         Effect   = "Allow",
-        Action   = "ssm:SendCommand",
+        Action   = [
+          "ssm:SendCommand",
+          "ssm:GetCommandInvocation",
+          "ssm:DescribeInstanceInformation",
+          "ssm:ListCommandInvocations"
+        ],
         Resource = [
           aws_instance.web_server.arn,
-          "arn:aws:ssm:*:*:document/AWS-RunShellScript"
+          "arn:aws:ssm:*:*:document/AWS-RunShellScript",
+          "arn:aws:ssm:*:*:*"
         ]
       },
 
