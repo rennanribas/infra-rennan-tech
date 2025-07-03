@@ -45,11 +45,12 @@ jobs:
           fi
 
           SERVICE="${{ github.event.inputs.service || github.event.client_payload.service || 'all' }}"
+          IMAGE_TAG="${{ github.event.client_payload.image_tag || 'latest' }}"
 
           if [ "$SERVICE" = "all" ]; then
-            DEPLOY_CMD="sudo docker compose pull && sudo docker compose up -d"
+            DEPLOY_CMD="sudo docker compose pull && sudo docker compose up -d --force-recreate"
           else
-            DEPLOY_CMD="sudo docker compose pull $SERVICE && sudo docker compose up -d $SERVICE"
+            DEPLOY_CMD="sudo docker compose pull $SERVICE && sudo docker compose up -d --force-recreate $SERVICE"
           fi
 
           COMMAND_ID=$(aws ssm send-command \
