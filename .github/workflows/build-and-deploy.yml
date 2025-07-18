@@ -10,9 +10,6 @@ on:
   repository_dispatch:
     types: [deploy-app]
 
-env:
-  AWS_REGION: us-east-1
-
 permissions:
   id-token: write
   contents: read
@@ -25,15 +22,19 @@ jobs:
       - name: Checkout infrastructure repo
         uses: actions/checkout@v4
 
+      - name: Install Doppler CLI
+        uses: dopplerhq/cli-action@v3
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-role
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: us-east-1
           role-skip-session-tagging: true
 
       - name: Deploy to EC2
         run: |
+          doppler run -- bash -c '
           INSTANCE_ID=$(aws ec2 describe-instances \
             --filters "Name=tag:Name,Values=rennan-tech-server" "Name=instance-state-name,Values=running" \
             --query 'Reservations[0].Instances[0].InstanceId' \
@@ -48,9 +49,25 @@ jobs:
           IMAGE_TAG="${{ github.event.client_payload.image_tag || 'latest' }}"
 
           if [ "$SERVICE" = "all" ]; then
-            DEPLOY_CMD="sudo docker compose pull && sudo docker compose up -d --force-recreate"
+            DEPLOY_CMD="
+              sudo docker stop \$(sudo docker ps -aq) 2>/dev/null || true &&
+              sudo docker rm \$(sudo docker ps -aq) 2>/dev/null || true &&
+              sudo docker pull public.ecr.aws/q9c0i8b3/rennan-tech:latest &&
+              sudo docker pull public.ecr.aws/q9c0i8b3/engineer-lab:latest &&
+              sudo docker pull caddy:2-alpine &&
+              sudo docker network create caddy 2>/dev/null || true &&
+              sudo docker run -d --name caddy --restart unless-stopped --network caddy -p 80:80 -p 443:443 -v /home/ubuntu/infra-rennan-tech/Caddyfile:/etc/caddy/Caddyfile caddy:2-alpine &&
+              sudo docker run -d --name rennan-tech --restart unless-stopped --network caddy public.ecr.aws/q9c0i8b3/rennan-tech:latest &&
+              sudo docker run -d --name engineer-lab --restart unless-stopped --network caddy public.ecr.aws/q9c0i8b3/engineer-lab:latest
+            "
           else
-            DEPLOY_CMD="sudo docker compose pull $SERVICE && sudo docker compose up -d --force-recreate $SERVICE"
+            DEPLOY_CMD="
+              sudo docker stop $SERVICE 2>/dev/null || true &&
+              sudo docker rm $SERVICE 2>/dev/null || true &&
+              sudo docker pull public.ecr.aws/q9c0i8b3/$SERVICE:latest &&
+              sudo docker network create caddy 2>/dev/null || true &&
+              sudo docker run -d --name $SERVICE --restart unless-stopped --network caddy public.ecr.aws/q9c0i8b3/$SERVICE:latest
+            "
           fi
 
           COMMAND_ID=$(aws ssm send-command \
@@ -74,11 +91,15 @@ jobs:
           aws ssm get-command-invocation \
             --command-id $COMMAND_ID \
             --instance-id $INSTANCE_ID \
-            --query 'StandardOutputContent' \
+            --query "StandardOutputContent" \
             --output text
+          '
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
 
       - name: Verify deployment
         run: |
+          doppler run -- bash -c '
           INSTANCE_IP=$(aws ec2 describe-instances \
             --filters "Name=tag:Name,Values=rennan-tech-server" "Name=instance-state-name,Values=running" \
             --query 'Reservations[0].Instances[0].PublicIpAddress' \
@@ -93,3 +114,6 @@ jobs:
             echo "❌ Main site is not responding"
             exit 1
           fi
+          '
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}

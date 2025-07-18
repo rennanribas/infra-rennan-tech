@@ -4,7 +4,8 @@
 .PHONY: help dev-up dev-down terraform-shell aws-shell gh-shell \
         terraform-init terraform-migrate terraform-plan terraform-apply \
         terraform-destroy terraform-fmt terraform-validate \
-        aws-identity propagate-secrets clean prod-up prod-down prod-logs
+        aws-identity propagate-secrets clean prod-up prod-down prod-logs \
+        doppler-setup doppler-secrets-sync doppler-run
 
 ## ---------------------------------------------------------------------
 ## default: list commands
@@ -33,6 +34,11 @@ help:
 	@echo '  make aws-identity      – show current AWS identity'
 	@echo '  make propagate-secrets – push terraform outputs as repo secrets'
 	@echo '  make clean             – docker prune & volume cleanup'
+	@echo ''
+	@echo 'Doppler:'
+	@echo '  make doppler-setup     – setup Doppler CLI and login'
+	@echo '  make doppler-secrets-sync – sync secrets from Doppler'
+	@echo '  make doppler-run       – run commands with Doppler secrets'
 	@echo ''
 	@echo 'Production docker-compose.yml:'
 	@echo '  make prod-up / prod-down / prod-logs'
@@ -121,3 +127,27 @@ clean:
 prod-up:    ; docker compose up -d
 prod-down:  ; docker compose down
 prod-logs:  ; docker compose logs -f
+
+## ---------------------------------------------------------------------
+## doppler helpers
+## ---------------------------------------------------------------------
+doppler-setup:
+	@echo "Setting up Doppler CLI..."
+	@if ! command -v doppler >/dev/null 2>&1; then \
+		echo "Installing Doppler CLI..."; \
+		curl -Ls --tlsv1.2 --proto "=https" --retry 3 https://cli.doppler.com/install.sh | sh; \
+	fi
+	@echo "Doppler CLI installed. Please run 'doppler login' to authenticate."
+
+doppler-secrets-sync:
+	@echo "Syncing secrets from Doppler..."
+	doppler secrets download --no-file --format env
+
+doppler-run:
+	@echo "Usage: make doppler-run CMD='your-command'"
+	@echo "Example: make doppler-run CMD='terraform plan'"
+	@if [ -z "$(CMD)" ]; then \
+		echo "Error: CMD parameter is required"; \
+		exit 1; \
+	fi
+	doppler run -- $(CMD)
