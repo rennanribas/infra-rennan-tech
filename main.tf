@@ -230,7 +230,7 @@ resource "aws_instance" "web_server" {
   user_data = <<-EOF
     #!/bin/bash
     apt-get update -y
-    apt-get install -y docker.io git curl
+    apt-get install -y docker.io git curl awscli
     usermod -aG docker ubuntu
     systemctl enable --now docker
 
@@ -244,6 +244,18 @@ resource "aws_instance" "web_server" {
 
     sudo -u ubuntu git clone https://github.com/rennanribas/infra-rennan-tech.git /home/ubuntu/infra-rennan-tech
     chown -R ubuntu:ubuntu /home/ubuntu/infra-rennan-tech
+    
+    # Configurar variáveis de ambiente do Doppler diretamente
+    RENNAN_TECH_ECR_URI=$(aws ssm get-parameter --name "/doppler/rennan-tech/landing/ECR_REPOSITORY_URI" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+    ENGINEER_LAB_ECR_URI=$(aws ssm get-parameter --name "/doppler/rennan-tech/engineer-lab/ECR_REPOSITORY_URI" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+    
+    cat > /home/ubuntu/infra-rennan-tech/.env << ENVEOF
+# ECR Repository URIs (gerenciado pelo Doppler via Parameter Store)
+RENNAN_TECH_ECR_URI=$${RENNAN_TECH_ECR_URI}
+ENGINEER_LAB_ECR_URI=$${ENGINEER_LAB_ECR_URI}
+ENVEOF
+    
+    chown ubuntu:ubuntu /home/ubuntu/infra-rennan-tech/.env
   EOF
 }
 
@@ -299,6 +311,35 @@ resource "aws_iam_policy" "doppler_parameter_store_policy" {
 resource "aws_iam_role_policy_attachment" "doppler_parameter_store_policy_attachment" {
   role       = aws_iam_role.doppler_parameter_store_role.name
   policy_arn = aws_iam_policy.doppler_parameter_store_policy.arn
+}
+
+# ── ECR Repository URIs in Parameter Store ──────────
+resource "aws_ssm_parameter" "ecr_rennan_tech_uri" {
+  name      = "/doppler/rennan-tech/landing/ECR_REPOSITORY_URI"
+  type      = "String"
+  value     = aws_ecrpublic_repository.rennan-tech.repository_uri
+  overwrite = true
+
+  tags = {
+    Name        = "ecr-rennan-tech-uri"
+    Environment = var.environment
+    Project     = var.project_name
+    ManagedBy   = "terraform"
+  }
+}
+
+resource "aws_ssm_parameter" "ecr_engineer_lab_uri" {
+  name      = "/doppler/rennan-tech/engineer-lab/ECR_REPOSITORY_URI"
+  type      = "String"
+  value     = aws_ecrpublic_repository.engineer-lab.repository_uri
+  overwrite = true
+
+  tags = {
+    Name        = "ecr-engineer-lab-uri"
+    Environment = var.environment
+    Project     = var.project_name
+    ManagedBy   = "terraform"
+  }
 }
 
 output "instance_id"                     { value = aws_instance.web_server.id }

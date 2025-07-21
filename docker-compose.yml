@@ -1,12 +1,12 @@
 services:
   rennan-tech:
-    image: public.ecr.aws/q9c0i8b3/rennan-tech:latest
+    image: ${RENNAN_TECH_ECR_URI:-public.ecr.aws/q9c0i8b3/rennan-tech}:latest
     container_name: rennan-tech
     restart: unless-stopped
     networks: [caddy]
 
   engineer-lab:
-    image: public.ecr.aws/q9c0i8b3/engineer-lab:latest
+    image: ${ENGINEER_LAB_ECR_URI:-public.ecr.aws/q9c0i8b3/engineer-lab}:latest
     container_name: engineer-lab
     restart: unless-stopped
     networks: [caddy]
