@@ -1,16 +1,16 @@
 # Doppler configuration for infra-rennan-tech
 setup:
-  project: rennan-tech-infra
-  config: production
+  project: rennan-tech
+  config: prd
 
 # Environment mappings
 environments:
   development:
-    project: rennan-tech-infra
+    project: rennan-tech
     config: dev
   staging:
-    project: rennan-tech-infra
-    config: staging
+    project: rennan-tech
+    config: stg
   production:
-    project: rennan-tech-infra
-    config: production
+    project: rennan-tech
+    config: prd

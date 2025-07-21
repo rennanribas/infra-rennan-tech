@@ -27,3 +27,14 @@ variable "project_name" {
   type        = string
   default     = "rennan-tech"
 }
+
+variable "doppler_workspace_slug" {
+  description = "Doppler workspace slug for External ID in IAM role trust policy"
+  type        = string
+  default     = "rennan-tech"
+  
+  validation {
+    condition     = can(regex("^[a-z0-9-]+$", var.doppler_workspace_slug))
+    error_message = "Doppler workspace slug must contain only lowercase letters, numbers, and hyphens."
+  }
+}

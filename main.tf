@@ -149,7 +149,10 @@ resource "aws_iam_policy" "github_actions_policy" {
           "ec2:Describe*",
           "iam:Get*",
           "iam:List*",
-          "ssm:ListDocuments"
+          "ssm:ListDocuments",
+          "ssm:GetParameter",
+          "ssm:GetParameters",
+          "ssm:GetParametersByPath"
         ],
         Resource = "*"
       }
@@ -244,10 +247,67 @@ resource "aws_instance" "web_server" {
   EOF
 }
 
+# ── Doppler Integration ──────────────────────────────
+resource "aws_iam_role" "doppler_parameter_store_role" {
+  name = "doppler-parameter-store-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Principal = {
+        AWS = "arn:aws:iam::299900769157:user/doppler-integration-operator"
+      },
+      Action = "sts:AssumeRole"
+    }]
+  })
+
+  tags = {
+    Name        = "doppler-parameter-store-role"
+    Environment = var.environment
+    Project     = var.project_name
+    ManagedBy   = "terraform"
+  }
+}
+
+resource "aws_iam_policy" "doppler_parameter_store_policy" {
+  name        = "DopplerParameterStorePolicy"
+  description = "Allow Doppler to manage secrets in Parameter Store"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "ssm:PutParameter",
+          "ssm:GetParameter",
+          "ssm:GetParameters",
+          "ssm:GetParametersByPath",
+          "ssm:DeleteParameter",
+          "ssm:DescribeParameters",
+          "ssm:AddTagsToResource",
+          "ssm:RemoveTagsFromResource",
+          "ssm:ListTagsForResource"
+        ],
+        Resource = "arn:aws:ssm:${var.aws_region}:*:parameter/doppler/rennan-tech/*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "doppler_parameter_store_policy_attachment" {
+  role       = aws_iam_role.doppler_parameter_store_role.name
+  policy_arn = aws_iam_policy.doppler_parameter_store_policy.arn
+}
+
 output "instance_id"                     { value = aws_instance.web_server.id }
 output "instance_public_ip"              { value = aws_instance.web_server.public_ip }
 output "instance_public_dns"             { value = aws_instance.web_server.public_dns }
 output "github_actions_role_arn"         { value = aws_iam_role.github_actions.arn }
+output "doppler_role_arn"                { value = aws_iam_role.doppler_parameter_store_role.arn }
+output "parameter_store_path"            { value = "/doppler/rennan-tech" }
+output "aws_region"                      { value = var.aws_region }
 output "ecr_rennan_tech_repository_url"  { value = aws_ecrpublic_repository.rennan-tech.repository_uri }
 output "ecr_engineer_lab_repository_url" {
   value = aws_ecrpublic_repository.engineer-lab.repository_uri
