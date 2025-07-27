@@ -50,23 +50,23 @@ jobs:
 
           if [ "$SERVICE" = "all" ]; then
             DEPLOY_CMD="
-              sudo docker stop \$(sudo docker ps -aq) 2>/dev/null || true &&
-              sudo docker rm \$(sudo docker ps -aq) 2>/dev/null || true &&
-              sudo docker pull public.ecr.aws/q9c0i8b3/rennan-tech:latest &&
-              sudo docker pull public.ecr.aws/q9c0i8b3/engineer-lab:latest &&
-              sudo docker pull caddy:2-alpine &&
-              sudo docker network create caddy 2>/dev/null || true &&
-              sudo docker run -d --name caddy --restart unless-stopped --network caddy -p 80:80 -p 443:443 -v /home/ubuntu/infra-rennan-tech/Caddyfile:/etc/caddy/Caddyfile caddy:2-alpine &&
-              sudo docker run -d --name rennan-tech --restart unless-stopped --network caddy public.ecr.aws/q9c0i8b3/rennan-tech:latest &&
-              sudo docker run -d --name engineer-lab --restart unless-stopped --network caddy public.ecr.aws/q9c0i8b3/engineer-lab:latest
+              RENNAN_TECH_ECR_URI=\$(aws ssm get-parameter --name '/doppler/rennan-tech/landing/ECR_REPOSITORY_URI' --query 'Parameter.Value' --output text 2>/dev/null || echo 'public.ecr.aws/q9c0i8b3/rennan-tech') &&
+              ENGINEER_LAB_ECR_URI=\$(aws ssm get-parameter --name '/doppler/rennan-tech/engineer-lab/ECR_REPOSITORY_URI' --query 'Parameter.Value' --output text 2>/dev/null || echo 'public.ecr.aws/q9c0i8b3/engineer-lab') &&
+              echo RENNAN_TECH_ECR_URI=\$RENNAN_TECH_ECR_URI > .env &&
+              echo ENGINEER_LAB_ECR_URI=\$ENGINEER_LAB_ECR_URI >> .env &&
+              sudo docker compose --env-file .env down --remove-orphans &&
+              sudo docker compose --env-file .env pull &&
+              sudo docker compose --env-file .env up -d &&
+              sudo docker image prune -f
             "
           else
             DEPLOY_CMD="
-              sudo docker stop $SERVICE 2>/dev/null || true &&
-              sudo docker rm $SERVICE 2>/dev/null || true &&
-              sudo docker pull public.ecr.aws/q9c0i8b3/$SERVICE:latest &&
-              sudo docker network create caddy 2>/dev/null || true &&
-              sudo docker run -d --name $SERVICE --restart unless-stopped --network caddy public.ecr.aws/q9c0i8b3/$SERVICE:latest
+              RENNAN_TECH_ECR_URI=\$(aws ssm get-parameter --name '/doppler/rennan-tech/landing/ECR_REPOSITORY_URI' --query 'Parameter.Value' --output text 2>/dev/null || echo 'public.ecr.aws/q9c0i8b3/rennan-tech') &&
+              ENGINEER_LAB_ECR_URI=\$(aws ssm get-parameter --name '/doppler/rennan-tech/engineer-lab/ECR_REPOSITORY_URI' --query 'Parameter.Value' --output text 2>/dev/null || echo 'public.ecr.aws/q9c0i8b3/engineer-lab') &&
+              echo RENNAN_TECH_ECR_URI=\$RENNAN_TECH_ECR_URI > .env &&
+              echo ENGINEER_LAB_ECR_URI=\$ENGINEER_LAB_ECR_URI >> .env &&
+              sudo docker compose --env-file .env up -d $SERVICE &&
+              sudo docker image prune -f
             "
           fi
 
@@ -76,8 +76,7 @@ jobs:
             --parameters "commands=[
               \"cd /home/ubuntu/infra-rennan-tech\",
               \"git pull origin main\",
-              \"$DEPLOY_CMD\",
-              \"sudo docker image prune -f\"
+              \"$DEPLOY_CMD\"
             ]" \
             --query 'Command.CommandId' \
             --output text)

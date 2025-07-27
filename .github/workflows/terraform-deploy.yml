@@ -8,6 +8,8 @@ on:
       - 'variables.tf'
       - 'versions.tf'
       - 'backend.tf'
+      - 'docker-compose.yml'
+      - 'Caddyfile'
       - '.github/workflows/terraform-deploy.yml'
   pull_request:
     branches: [main]
@@ -16,6 +18,8 @@ on:
       - 'variables.tf'
       - 'versions.tf'
       - 'backend.tf'
+      - 'docker-compose.yml'
+      - 'Caddyfile'
       - '.github/workflows/terraform-deploy.yml'
   workflow_dispatch:
 
