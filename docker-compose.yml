@@ -1,3 +1,4 @@
+# Docker Compose file for rennan-tech infrastructure
 services:
   rennan-tech:
     image: ${RENNAN_TECH_ECR_URI:-public.ecr.aws/q9c0i8b3/rennan-tech}:latest

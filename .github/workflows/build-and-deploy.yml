@@ -75,7 +75,6 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --parameters "commands=[
               \"cd /home/ubuntu/infra-rennan-tech\",
-              \"git pull origin main\",
               \"$DEPLOY_CMD\"
             ]" \
             --query 'Command.CommandId' \

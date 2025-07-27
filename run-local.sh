@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Script para executar o ambiente local de desenvolvimento
-# Simula o ambiente de deploy usando Docker Compose
-
 set -e
 
 echo "Starting local development environment..."
