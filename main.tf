@@ -152,7 +152,8 @@ resource "aws_iam_policy" "github_actions_policy" {
           "ssm:ListDocuments",
           "ssm:GetParameter",
           "ssm:GetParameters",
-          "ssm:GetParametersByPath"
+          "ssm:GetParametersByPath",
+          "ssm:DescribeParameters"
         ],
         Resource = "*"
       }
